@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>减重计划</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/vendor/echarts.min.js"></script>
+</head>
+<body>
+  <header class="top">
+    <h1>减重计划</h1>
+    <span id="todayLabel" class="muted"></span>
+  </header>
+
+  <main>
+    <section id="warnings" class="warnings"></section>
+    <section id="emptyState" class="panel empty" hidden></section>
+
+    <div id="dashboard" hidden>
+      <section id="card" class="card-grid"></section>
+
+      <section class="panel">
+        <h2>体重轨迹（kg）</h2>
+        <div id="weightChart" class="chart"></div>
+        <p class="hint">虚线是计划曲线，阴影是 ±0.5 kg 容差带；实线是去掉日常波动后的趋势体重，点线是按当前建议摄入的预测。</p>
+      </section>
+
+      <section class="panel">
+        <h2>每日热量（kcal）</h2>
+        <div id="calChart" class="chart small"></div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>记录体重</h2>
+      <form id="weighForm" class="inline-form">
+        <label>体重（kg）<input type="number" name="weight_kg" step="0.05" min="20" max="300" inputmode="decimal" required></label>
+        <label>时间<input type="datetime-local" name="measured_at"></label>
+        <button type="submit">保存</button>
+      </form>
+      <details class="sub-details">
+        <summary>批量导入历史数据</summary>
+        <p class="hint">每行一条：<code>日期,体重</code> 或 <code>日期 时间,体重</code>。只有日期的按早上 8 点记录。</p>
+        <textarea id="importText" rows="5" placeholder="2026-09-01,86.2&#10;2026-09-02 07:30,85.9"></textarea>
+        <button type="button" id="importBtn">导入</button>
+      </details>
+      <p id="weighMsg" class="msg" role="status"></p>
+    </section>
+
+    <section class="panel">
+      <h2>最近记录</h2>
+      <div class="table-wrap">
+        <table id="history">
+          <thead><tr><th>时间</th><th>体重 kg</th><th>来源</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <button type="button" id="moreHistory" class="link-btn" hidden>显示更多</button>
+    </section>
+
+    <section class="panel">
+      <details id="settingsBox">
+        <summary><h2>计划设置</h2></summary>
+        <form id="profileForm" class="grid-form">
+          <label>性别
+            <select name="sex"><option value="male">男</option><option value="female">女</option></select>
+          </label>
+          <label>年龄<input type="number" name="age" min="14" max="100" required></label>
+          <label>身高（cm）<input type="number" name="height_cm" min="100" max="250" step="0.5" required></label>
+          <label>日常活动水平
+            <select name="activity">
+              <option value="sedentary">久坐（几乎不运动）</option>
+              <option value="light">轻度（每周运动 1–3 天）</option>
+              <option value="moderate">中度（每周运动 3–5 天）</option>
+              <option value="active">高度（每周运动 6–7 天）</option>
+            </select>
+          </label>
+          <label>目标体重（kg）<input type="number" name="target_weight" min="30" max="300" step="0.1" required></label>
+          <label>计划开始日期<input type="date" name="plan_start" required></label>
+          <label>目标日期<input type="date" name="target_date" required></label>
+          <label>每天额外运动消耗（kcal）<input type="number" name="exercise_kcal" min="0" max="2000" step="10"></label>
+          <label>起始体重（kg，可留空）<input type="number" name="start_weight" min="30" max="300" step="0.05" placeholder="默认取开始日的趋势体重"></label>
+          <div class="form-actions"><button type="submit">保存计划</button></div>
+        </form>
+        <p id="profileMsg" class="msg" role="status"></p>
+        <div id="planSummary" class="plan-summary"></div>
+      </details>
+    </section>
+
+    <section class="panel" id="checkinPanel" hidden>
+      <h2>每周校准</h2>
+      <p class="hint">每 7 天用当时的趋势体重和剩余天数重新计算一次建议摄入。</p>
+      <div class="table-wrap">
+        <table id="checkins">
+          <thead><tr><th>校准日</th><th>趋势体重</th><th>建议摄入</th><th>按期所需</th><th>剩余天数</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="muted">本工具用于自我管理，不能替代医生或营养师的建议。</footer>
+  <script src="/static/app.js"></script>
+</body>
+</html>

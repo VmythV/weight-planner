@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- 模板：由 deploy/install-launchd.sh 替换 __UV__ / __DIR__ / __PORT__ 后安装 -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.weightplanner</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__UV__</string>
+    <string>run</string>
+    <string>--no-dev</string>
+    <string>uvicorn</string>
+    <string>app.main:create_app</string>
+    <string>--factory</string>
+    <string>--host</string>
+    <string>0.0.0.0</string>
+    <string>--port</string>
+    <string>__PORT__</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>__DIR__</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>__DIR__/data/server.log</string>
+  <key>StandardErrorPath</key>
+  <string>__DIR__/data/server.log</string>
+</dict>
+</plist>
