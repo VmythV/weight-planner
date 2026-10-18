@@ -1,0 +1,137 @@
+# 监听米家体脂秤 S400 Pro 的蓝牙广播，称完后把结果 POST 到 weight-planner。
+# 编译烧录：uvx --from esphome==2026.10.0b4 esphome run weight-scale.yaml
+# 敏感信息放在同目录 secrets.yaml（已加入 .gitignore），模板见 secrets.example.yaml。
+
+substitutions:
+  # 称完最后一个蓝牙包后，等这么久没有新数据再上报（体重包和阻抗包分两次到达）
+  quiet_time: 10s
+
+esphome:
+  name: weight-scale
+  friendly_name: Weight Scale
+
+esp32:
+  board: esp32dev        # 按实际开发板修改，例如 esp32-c3-devkitm-1、esp32-s3-devkitc-1
+  framework:
+    type: esp-idf
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Weight-Scale Fallback"
+    password: !secret fallback_password
+
+captive_portal:
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+esp32_ble_tracker:
+  scan_parameters:
+    active: false        # 被动监听即可，秤只发广播
+    # 默认每 320 ms 只扫 30 ms，实测会整包漏掉测量广播；改为几乎连续扫描
+    interval: 320ms
+    window: 300ms
+
+http_request:
+  timeout: 10s
+  # 上报走公网 HTTPS，用 esp-idf 内置根证书包校验服务器证书
+  verify_ssl: true
+
+globals:
+  - id: g_weight
+    type: float
+    initial_value: "NAN"
+  - id: g_imp_low
+    type: float
+    initial_value: "NAN"
+  - id: g_imp_high
+    type: float
+    initial_value: "NAN"
+  - id: g_heart_rate
+    type: float
+    initial_value: "NAN"
+  # 见下方 weight 的说明：为 true 时，紧接着到达的 impedance_low 实际是 250 kHz 阻抗
+  - id: g_next_imp_is_high
+    type: bool
+    initial_value: "false"
+
+sensor:
+  - platform: xiaomi_body_scale
+    mac_address: !secret scale_mac
+    bindkey: !secret scale_bindkey
+    weight:
+      name: "Weight"
+      # S400 Pro 的第二个包（只有 250 kHz 阻抗）体重字段是 0x7FF 而不是 0，
+      # 2026.10.0b4 的组件只认 0，会把它当成 204.7 kg，并把阻抗按 impedance_low 发布。
+      # 这里丢掉这个假体重，并标记下一个 impedance_low 改记为 impedance_high。
+      on_raw_value:
+        - lambda: "if (x > 204.6f) id(g_next_imp_is_high) = true;"
+      filters:
+        - lambda: "if (x > 204.6f) return {}; return x;"
+      on_value:
+        - lambda: "id(g_weight) = x;"
+        - script.execute: report_later
+    impedance_low:
+      name: "Impedance Low"
+      on_value:
+        - lambda: |-
+            if (id(g_next_imp_is_high)) {
+              id(g_next_imp_is_high) = false;
+              id(g_imp_high) = x;
+            } else {
+              id(g_imp_low) = x;
+            }
+        - script.execute: report_later
+    impedance_high:
+      name: "Impedance High"
+      on_value:
+        - lambda: "id(g_imp_high) = x;"
+        - script.execute: report_later
+    heart_rate:
+      name: "Heart Rate"
+      on_value:
+        - lambda: "id(g_heart_rate) = x;"
+        - script.execute: report_later
+    stabilized:
+      name: "Stabilized"
+
+script:
+  # 每收到一个数据包就重新计时；安静 quiet_time 之后把这一轮的数据合并成一次上报。
+  # 穿袜子称时只有第一个包，也能正常上报（缺的字段直接省略，不发 NaN）。
+  - id: report_later
+    mode: restart
+    then:
+      - delay: ${quiet_time}
+      - if:
+          condition:
+            lambda: "return !std::isnan(id(g_weight));"
+          then:
+            - http_request.post:
+                url: !secret report_url
+                request_headers:
+                  Content-Type: application/json
+                  X-API-Key: !secret api_token
+                json: |-
+                  root["weight_kg"] = id(g_weight);
+                  root["source"] = "esp32";
+                  if (!std::isnan(id(g_imp_low))) root["impedance_low"] = id(g_imp_low);
+                  if (!std::isnan(id(g_imp_high))) root["impedance_high"] = id(g_imp_high);
+                  if (!std::isnan(id(g_heart_rate))) root["heart_rate"] = (int) id(g_heart_rate);
+                on_response:
+                  - logger.log:
+                      format: "上报完成，HTTP %d"
+                      args: ["response->status_code"]
+                on_error:
+                  - logger.log:
+                      level: WARN
+                      format: "上报失败（服务器离线？），本次数据丢弃"
+      - lambda: |-
+          id(g_weight) = NAN;
+          id(g_imp_low) = NAN;
+          id(g_imp_high) = NAN;
+          id(g_heart_rate) = NAN;

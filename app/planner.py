@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import math
 from bisect import bisect_right
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 
 KCAL_PER_KG = 7700.0
@@ -34,6 +34,10 @@ PROTEIN_G_PER_KG = 1.6  # 按目标体重计算
 FAT_RATIO = 0.25
 WALK_KCAL_PER_KG_KM = 0.5
 STEP_LENGTH_M = 0.7
+WALK_KMH = 5.0  # 快走速度，用于把运动消耗折算成分钟
+OBSERVED_WINDOW_DAYS = 28  # 「实际速度」按最近 28 天的趋势体重拟合
+OBSERVED_MIN_DAYS = 7
+REALISTIC_EXTRA_KCAL = 500  # 每天额外运动超过这个量，长期很难坚持
 
 ACTIVITY_FACTORS = {
     "sedentary": 1.2,
@@ -173,6 +177,21 @@ def value_on_or_before(series: list[tuple[date, float]], day: date) -> float | N
     return series[i - 1][1] if i else None
 
 
+def _weekly_slope(points: list[tuple[date, float]]) -> float | None:
+    """对 (日期, 体重) 做线性回归，返回每周变化（kg，负数为下降）。"""
+    if len(points) < 2:
+        return None
+    origin = points[0][0]
+    xs = [(d - origin).days for d, _ in points]
+    ys = [w for _, w in points]
+    mean_x = sum(xs) / len(xs)
+    mean_y = sum(ys) / len(ys)
+    sxx = sum((x - mean_x) ** 2 for x in xs)
+    if sxx == 0:
+        return None
+    return sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / sxx * 7.0
+
+
 def plateau_rate(trend: list[tuple[date, float]], plan_start: date) -> float | None:
     """近 14 天趋势体重的每周变化（kg，负数为下降）；数据不足时返回 None。"""
     if not trend:
@@ -183,15 +202,19 @@ def plateau_rate(trend: list[tuple[date, float]], plan_start: date) -> float | N
     points = [(d, w) for d, w in trend if d >= window_start]
     if len(points) < PLATEAU_MIN_POINTS:
         return None
-    xs = [(d - window_start).days for d, _ in points]
-    ys = [w for _, w in points]
-    mean_x = sum(xs) / len(xs)
-    mean_y = sum(ys) / len(ys)
-    sxx = sum((x - mean_x) ** 2 for x in xs)
-    if sxx == 0:
+    return _weekly_slope(points)
+
+
+def observed_rate(trend: list[tuple[date, float]], plan_start: date) -> tuple[float, int] | None:
+    """最近 28 天（不早于计划开始日）趋势体重的实际每周变化，以及实际覆盖的天数。"""
+    if not trend:
         return None
-    slope = sum((x - mean_x) * (y - mean_y) for x, y in zip(xs, ys)) / sxx
-    return slope * 7.0
+    window_start = max(trend[-1][0] - timedelta(days=OBSERVED_WINDOW_DAYS), plan_start)
+    points = [(d, w) for d, w in trend if d >= window_start]
+    if len(points) < PLATEAU_MIN_POINTS or (points[-1][0] - points[0][0]).days < OBSERVED_MIN_DAYS:
+        return None
+    rate = _weekly_slope(points)
+    return None if rate is None else (rate, (points[-1][0] - points[0][0]).days)
 
 
 # ---------- 计划与安全检查 ----------
@@ -280,6 +303,90 @@ def weekly_checkins(
 
 
 # ---------- 汇总给前端 ----------
+
+
+def walk_equivalent(kcal: float, weight: float) -> tuple[int, int]:
+    """把运动消耗折算成快走的步数和分钟数。"""
+    km = kcal / (WALK_KCAL_PER_KG_KM * weight)
+    return round(km * 1000.0 / STEP_LENGTH_M), round(km / WALK_KMH * 60.0)
+
+
+def action_plan(
+    p: Profile,
+    weight: float,
+    today: date,
+    recommended: float,
+    observed: tuple[float, int] | None,
+    since_start: float | None = None,
+) -> dict:
+    """从今天的趋势体重出发，给出按期达成需要做什么，以及几种可选方案。"""
+    days_left = (p.target_date - today).days
+    remaining = weight - p.target_weight
+    if remaining <= 0 or days_left <= 0:
+        return {"applicable": False}
+
+    p_today = replace(p, plan_start=today)
+    floor = p.intake_floor
+    burn = tdee(weight, p) + p.exercise_kcal
+    required = solve_intake(weight, p.target_weight, days_left, p)
+    keep_curve = curve_for_intake(weight, today, required, p)
+    extra = max(0.0, floor - required)
+    steps, minutes = walk_equivalent(extra, weight)
+    keep_pct = keep_curve.initial_weekly_loss_pct
+
+    def reach_date_for(intake: float) -> date | None:
+        days = curve_for_intake(weight, today, intake, p).days_to_reach(p.target_weight)
+        return None if days is None else today + timedelta(days=math.ceil(days))
+
+    floor_date = reach_date_for(floor)
+    safe_date = earliest_safe_date(weight, p_today)
+    safe_intake = solve_intake(weight, p.target_weight, (safe_date - today).days, p) if safe_date else None
+
+    # 按建议摄入，模型预期当前每周减多少；与实际速度比较，得出执行偏差
+    rec_curve = curve_for_intake(weight, today, recommended, p)
+    expected_rate = -7.0 * rec_curve.k * (weight - rec_curve.w_eq)
+    actual = None
+    if observed is not None:
+        rate, window = observed
+        pace_days = remaining / -rate * 7.0 if rate < 0 else math.inf
+        pace_date = today + timedelta(days=math.ceil(pace_days)) if pace_days <= MAX_PLAN_DAYS else None
+        gap_kcal = (rate - expected_rate) * KCAL_PER_KG / 7.0
+        actual = {
+            "rate": round(rate, 2),
+            "window_days": window,
+            "reach_date": pace_date.isoformat() if pace_date else None,
+            "gap_kcal": _kcal(max(0.0, gap_kcal)),
+        }
+        if since_start is not None:
+            actual["since_start_rate"] = round(since_start, 2)
+
+    feasible = extra <= REALISTIC_EXTRA_KCAL and keep_pct <= DANGER_WEEKLY_LOSS_PCT
+    return {
+        "applicable": True,
+        "days_left": days_left,
+        "remaining_kg": _r2(remaining),
+        "avg_rate": _r2(-remaining / days_left * 7.0),
+        "burn": _kcal(burn),
+        "keep_date": {
+            "required_intake": _kcal(required),
+            "intake": _kcal(max(required, floor)),
+            "extra_exercise": _kcal(extra),
+            "steps": steps,
+            "minutes": minutes,
+            "weekly_loss_pct": round(keep_pct, 2),
+            "weekly_loss_kg": _r2(keep_pct * weight / 100.0),
+            "too_fast": keep_pct > MAX_WEEKLY_LOSS_PCT,
+            "feasible": feasible,
+        },
+        "floor_only": {"intake": _kcal(floor), "reach_date": floor_date.isoformat() if floor_date else None},
+        "safe": {
+            "reach_date": safe_date.isoformat() if safe_date else None,
+            "intake": _kcal(max(safe_intake, floor)) if safe_intake is not None else None,
+        },
+        "expected_rate": _r2(expected_rate),
+        "actual": actual,
+        "protein_g": round(PROTEIN_G_PER_KG * p.target_weight),
+    }
 
 
 def _r2(value: float | None) -> float | None:
@@ -496,9 +603,18 @@ def build_dashboard(p: Profile | None, weighins: list[Weighin], today: date) -> 
                 series[key].append(None)
         day += timedelta(days=1)
 
+    observed = observed_rate(trend, p.plan_start) if trend else None
+    since_start = _weekly_slope([(d, w) for d, w in trend if d >= p.plan_start])
+    action = (
+        action_plan(p, latest_trend, today, rec, observed, since_start)
+        if losing and not reached and not ended
+        else {"applicable": False}
+    )
+
     return {
         "ready": True,
         "today": today.isoformat(),
+        "action": action,
         "plan": {
             "start_weight": _r2(w0),
             "target_weight": p.target_weight,

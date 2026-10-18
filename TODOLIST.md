@@ -19,35 +19,41 @@
 |---|---|
 | 型号 | 米家体脂秤 S400 Pro（MJTZC03YM） |
 | 蓝牙产品 ID | `0x4B05`（nRF Connect 实测） |
-| MAC 地址 | 见 ESP32 配置 |
-| 广播加密 | 是，需要 bindkey |
+| MAC 地址 | 填在 `esp32/secrets.yaml` 的 `scale_mac` |
+| 广播加密 | 是，需要 bindkey（MiBeacon v5） |
 
-- [ ] 买一块带蓝牙的 ESP32 开发板（ESP32 / ESP32-C3 / ESP32-S3 均可），用 USB 充电头供电，放在秤附近
-- [ ] 获取 bindkey：用 [Xiaomi-cloud-tokens-extractor](https://github.com/PiotrMachowski/Xiaomi-cloud-tokens-extractor) 在本机运行一次，服务器区域选 `cn`，记下这台秤的 BLE KEY（32 位十六进制）
-  - 自己在终端输入账号密码，不要交给别人
-  - 每天的短信/邮件验证码有 3–5 次上限
+- [x] ESP32 开发板：经典款 ESP32-D0WDQ6，4MB flash
+- [x] 获取 bindkey，填入 `esp32/secrets.yaml`（不提交 git，模板见 `esp32/secrets.example.yaml`）
   - 以后在米家里重置或重新绑定秤，bindkey 会变，需要重新获取
-- [ ] 等 ESPHome 2026.10.0 正式版发布（`xiaomi_body_scale` 组件目前只在 2026.10.0 测试版里）
-- [ ] 编写 ESPHome 配置：
-  - `xiaomi_body_scale`：填 MAC 和 bindkey，启用 weight / impedance_low / impedance_high / heart_rate / stabilized
-  - `wifi` + `http_request`：`stabilized` 变为 true 时，POST 到 `http://<Mac mini IP>:8765/api/weighins`，`source` 填 `esp32`
-  - 没测到阻抗或心率时（例如穿袜子称）不要发送 NaN，字段直接省略
-- [ ] 实测验证：
-  - S400 Pro 能否正常解密（开源库里的 `0x4B05` 是照搬别的项目的设备表，还没见到真机测试记录）
-  - ESP32 上报的体重与米家显示一致
-  - 体重包和阻抗包的到达间隔在 2 分钟合并窗口以内（见 `app/db.py` 的 `MERGE_WINDOW`）
-- [ ] 决定 Mac mini 离线时 ESP32 上报失败怎么处理（重试几次，或者接受丢失这一次）
-- [ ] ESP32 接入后，考虑给写入接口加一个简单的 token 校验
+- [x] 编写 ESPHome 配置 `esp32/weight-scale.yaml`（暂用 `2026.10.0b4`），编译烧录：
+  `cd esp32 && uvx --from esphome==2026.10.0b4 esphome run weight-scale.yaml`
+- [x] 实测验证（2026-10-17）：
+  - S400 Pro（`0x4B05`）可以正常解密
+  - 体重与米家一致（蓝牙包分辨率 0.1 kg，比米家显示少一位小数）
+  - 两个测量包间隔约 1 秒，远小于 2 分钟合并窗口；ESP32 安静 10 秒后合并成一次上报
+  - 扫描窗口必须调大：默认每 320 ms 只扫 30 ms，会整包漏掉测量广播，已改为 300/320 ms
+  - 手机米家 App 在附近连着秤时，秤可能不广播测量包，这次称重 ESP32 收不到
+- [ ] 升级到 ESPHome 2026.10.0 正式版，确认 `0x7FF` 问题是否已修：
+  - S400 Pro 第二个包（只有 250 kHz 阻抗）的体重字段是 `0x7FF`，组件只认 `0` 为无值，
+    会发布 204.7 kg，并把阻抗当成 `impedance_low`。目前在 `weight-scale.yaml` 里过滤绕过
+  - 正式版仍未修复的话，给 ESPHome 提 issue / PR
+- [ ] 决定 Mac mini 离线时 ESP32 上报失败怎么处理（目前：记日志、丢弃这一次）
+- [x] 网页密码登录 + 所有接口 API 令牌校验（2026-10-18，配置在 `.env`）
+- [ ] 可选：把 `quiet_time` 从 10 秒缩短到 3 秒左右，页面更新更快
 
 ## 三、功能增强（第 3 阶段，可选）
 
 - [ ] 每日推送：每天早上推送"今天可摄入 / 需消耗 / 当前状态"（可选 ntfy、企业微信机器人、Server 酱）
 - [ ] 饮食记录：记录每日实际摄入，并用"平均摄入 − 趋势体重变化 × 7700 / 天数"反推真实消耗，替代公式估算（自适应消耗）
 - [ ] 计划历史：目前修改「计划设置」会覆盖原计划，改为保留历次计划，在图上能对比
-- [ ] 体脂率、肌肉量估算：基于 S400 Pro 上报的双频阻抗；数值会和米家不一致，只看趋势
+- [x] 体脂率、肌肉量估算：已用 50 kHz 阻抗 + 开源 BIA 公式实现（比米家体脂率高约 2.7 个百分点）
+  - [ ] 多攒几组「米家读数 + 阻抗」，评估是否加校准偏移，或引入用到 250 kHz 阻抗的双频公式
+- [x] 健身房训练清单（2026-10-18）：A/B/C 轮换 + 恢复日、按可用时间排有氧、打勾和重量记录、加重建议
+  - [ ] 练一两周后回看：组数次数、坡度是否合适；考虑把实际训练消耗接入「自适应消耗」
+  - [ ] 健身房 Wi-Fi 不稳定时，打勾先存在手机本地，联网后再同步
 - [ ] PWA：加 manifest 和图标，添加到主屏幕后像独立 App 一样打开
 - [ ] 数据导出 CSV
-- [ ] 需要外网访问时：加登录验证，或用 Tailscale 之类的组网工具，不直接暴露端口
+- [ ] 需要外网访问时：前面加 HTTPS 反向代理（已有登录验证），或用 Tailscale 之类的组网工具，不直接暴露端口
 
 ## 四、算法待评估
 

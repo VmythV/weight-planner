@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>减重计划架构</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f2f1ed;
+    --ink: #0b0b0b; --ink-2: #52514e; --ink-3: #898781;
+    --line: #c3c2b7; --hair: #e1e0d9;
+    --blue: #2a78d6; --blue-soft: rgba(42,120,214,.10);
+    --orange: #eb6834; --orange-soft: rgba(235,104,52,.10);
+    --aqua: #1baf7a; --aqua-soft: rgba(27,175,122,.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface: #1a1a19; --surface-2: #232321;
+      --ink: #f0efec; --ink-2: #c3c2b7; --ink-3: #898781;
+      --line: #5a5a55; --hair: #2c2c2a;
+      --blue: #3987e5; --blue-soft: rgba(57,135,229,.16);
+      --orange: #d95926; --orange-soft: rgba(217,89,38,.16);
+      --aqua: #199e70; --aqua-soft: rgba(25,158,112,.16);
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink);
+         font: 15px/1.6 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 48px; }
+  h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -.01em; }
+  h2 { font-size: 18px; margin: 36px 0 12px; }
+  .lead { color: var(--ink-2); margin: 0 0 20px; }
+  .card { background: var(--surface); border: 1px solid var(--hair); border-radius: 14px; padding: 20px; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: inherit; }
+  .node rect { stroke-width: 1.5; }
+  .t1 { font-size: 15px; font-weight: 650; fill: var(--ink); }
+  .t2 { font-size: 12px; fill: var(--ink-2); }
+  .t3 { font-size: 11px; fill: var(--ink-3); }
+  .zone { fill: none; stroke: var(--line); stroke-dasharray: 5 5; stroke-width: 1; }
+  .zone-label { font-size: 12px; fill: var(--ink-3); font-weight: 600; letter-spacing: .04em; }
+  .edge { fill: none; stroke: var(--ink-3); stroke-width: 1.5; }
+  .edge-label { font-size: 11.5px; fill: var(--ink-2); }
+  .edge-bg { fill: var(--surface); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .grid .card h3 { margin: 0 0 8px; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+  .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  ul { margin: 0; padding-left: 18px; color: var(--ink-2); font-size: 14px; }
+  li + li { margin-top: 4px; }
+  code { background: var(--surface-2); padding: 1px 6px; border-radius: 5px; font-size: .9em; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  th { color: var(--ink-3); font-weight: 500; font-size: 13px; }
+  td:first-child { white-space: nowrap; font-weight: 550; }
+  .scroll { overflow-x: auto; }
+  .steps { counter-reset: s; list-style: none; padding: 0; }
+  .steps li { counter-increment: s; position: relative; padding-left: 34px; margin-top: 10px; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 22px; height: 22px;
+    border-radius: 50%; background: var(--blue-soft); color: var(--blue); font-size: 12px; font-weight: 650;
+    display: grid; place-items: center; }
+  footer { margin-top: 32px; color: var(--ink-3); font-size: 12px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>减重计划 · 系统架构</h1>
+  <p class="lead">体重秤的蓝牙广播由 ESP32 解密后，通过 WiFi 上报到 Mac mini 上的 FastAPI 服务；服务把数据存进 SQLite，计算计划和趋势，再由浏览器页面展示。</p>
+
+  <div class="card">
+    <svg viewBox="0 0 980 510" role="img" aria-labelledby="dTitle dDesc">
+      <title id="dTitle">系统架构图</title>
+      <desc id="dDesc">体重秤经蓝牙广播到 ESP32，ESP32 经 WiFi HTTP POST 到 Mac mini 上的 FastAPI，FastAPI 读写 SQLite 并调用计划算法，浏览器通过 HTTP 访问页面和接口。</desc>
+      <defs>
+        <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0 0L10 5L0 10z" fill="var(--ink-3)"/>
+        </marker>
+      </defs>
+
+      <!-- 区域 -->
+      <rect class="zone" x="10" y="30" width="250" height="470" rx="14"/>
+      <text class="zone-label" x="26" y="22">卫生间 · 蓝牙范围内</text>
+      <rect class="zone" x="300" y="30" width="430" height="470" rx="14"/>
+      <text class="zone-label" x="316" y="22">服务端 · Mac mini 或服务器</text>
+      <rect class="zone" x="770" y="30" width="200" height="470" rx="14"/>
+      <text class="zone-label" x="786" y="22">家庭局域网</text>
+
+      <!-- 体重秤 -->
+      <g class="node">
+        <rect x="35" y="60" width="200" height="110" rx="12" fill="var(--orange-soft)" stroke="var(--orange)"/>
+        <text class="t1" x="55" y="92">米家体脂秤 S400 Pro</text>
+        <text class="t2" x="55" y="116">MJTZC03YM · 0x4B05</text>
+        <text class="t3" x="55" y="138">称完发两个加密广播包</text>
+        <text class="t3" x="55" y="156">体重+心率+阻抗 / 高频阻抗</text>
+      </g>
+
+      <!-- ESP32 -->
+      <g class="node">
+        <rect x="35" y="270" width="200" height="150" rx="12" fill="var(--orange-soft)" stroke="var(--orange)"/>
+        <text class="t1" x="55" y="302">ESP32 网关</text>
+        <text class="t2" x="55" y="326">ESPHome 2026.10.0b4</text>
+        <text class="t3" x="55" y="348">bindkey 解密 MiBeacon v5</text>
+        <text class="t3" x="55" y="366">过滤 0x7FF 假体重</text>
+        <text class="t3" x="55" y="384">安静 10 秒后合并上报</text>
+        <text class="t3" x="55" y="402">Wi-Fi 2.4 GHz 联网</text>
+      </g>
+
+      <!-- FastAPI -->
+      <g class="node">
+        <rect x="330" y="60" width="370" height="150" rx="12" fill="var(--blue-soft)" stroke="var(--blue)"/>
+        <text class="t1" x="350" y="92">FastAPI 服务 · app/main.py</text>
+        <text class="t2" x="350" y="116">uvicorn :8765 · 网页密码登录 + API 令牌</text>
+        <text class="t3" x="350" y="142">/api/weighins  增删改查、CSV 导入、自动来源 2 分钟合并</text>
+        <text class="t3" x="350" y="162">/api/profile   计划设置</text>
+        <text class="t3" x="350" y="182">/api/dashboard 今日卡片、图表序列、警告、每周校准</text>
+      </g>
+
+      <!-- planner -->
+      <g class="node">
+        <rect x="330" y="270" width="175" height="150" rx="12" fill="var(--blue-soft)" stroke="var(--blue)"/>
+        <text class="t1" x="348" y="302">计划算法</text>
+        <text class="t2" x="348" y="324">app/planner.py</text>
+        <text class="t3" x="348" y="348">Mifflin-St Jeor 消耗</text>
+        <text class="t3" x="348" y="366">指数计划曲线反解</text>
+        <text class="t3" x="348" y="384">趋势体重加权拟合</text>
+        <text class="t3" x="348" y="402">每周校准 · 安全检查</text>
+      </g>
+
+      <!-- SQLite -->
+      <g class="node">
+        <rect x="525" y="270" width="175" height="150" rx="12" fill="var(--aqua-soft)" stroke="var(--aqua)"/>
+        <text class="t1" x="543" y="302">SQLite</text>
+        <text class="t2" x="543" y="324">data/weight.db</text>
+        <text class="t3" x="543" y="348">weighins 称重记录</text>
+        <text class="t3" x="543" y="366">settings 计划设置</text>
+        <text class="t3" x="543" y="384">单文件，迁移只需拷贝</text>
+        <text class="t3" x="543" y="402">环境变量 WP_DB 可改路径</text>
+      </g>
+
+      <!-- 浏览器 -->
+      <g class="node">
+        <rect x="790" y="60" width="160" height="160" rx="12" fill="var(--surface-2)" stroke="var(--line)"/>
+        <text class="t1" x="808" y="92">浏览器</text>
+        <text class="t2" x="808" y="116">手机 / 电脑</text>
+        <text class="t3" x="808" y="142">app/static/</text>
+        <text class="t3" x="808" y="160">原生 JS + ECharts</text>
+        <text class="t3" x="808" y="178">每 60 秒自动刷新</text>
+        <text class="t3" x="808" y="196">手动记录 / 修改记录</text>
+      </g>
+
+      <!-- 边 -->
+      <path class="edge" d="M135 170 V262" marker-end="url(#arr)"/>
+      <rect class="edge-bg" x="143" y="204" width="104" height="22" rx="4"/>
+      <text class="edge-label" x="149" y="219">BLE 被动广播</text>
+
+      <path class="edge" d="M235 345 H280 Q290 345 290 335 V190 Q290 180 300 180 H322" marker-end="url(#arr)"/>
+      <text class="edge-label" x="35" y="448">→ WiFi · HTTP POST</text>
+      <text class="edge-label" x="35" y="466">/api/weighins（source=esp32）</text>
+
+      <path class="edge" d="M445 210 V262" marker-end="url(#arr)"/>
+      <text class="edge-label" x="453" y="242">计算</text>
+      <path class="edge" d="M612 210 V262" marker-end="url(#arr)"/>
+      <path class="edge" d="M600 262 V218" marker-end="url(#arr)"/>
+      <text class="edge-label" x="620" y="242">读写</text>
+
+      <path class="edge" d="M782 120 H708" marker-end="url(#arr)"/>
+      <path class="edge" d="M708 150 H782" marker-end="url(#arr)"/>
+      <text class="edge-label" x="716" y="112">HTTP 请求</text>
+      <text class="edge-label" x="716" y="168">JSON / 页面</text>
+
+    </svg>
+  </div>
+
+  <h2>一次称重的数据流</h2>
+  <div class="card">
+    <ol class="steps">
+      <li>光脚上秤。秤在约 1 秒内先后广播两个加密包：体重 + 心率 + 50 kHz 阻抗，然后是 250 kHz 阻抗。每个包重复广播约 7–8 次。</li>
+      <li>ESP32 持续扫描（窗口 300/320 ms），用 bindkey 解密。第二个包体重字段是 <code>0x7FF</code>，组件误读成 204.7 kg，配置里把它过滤掉，并把阻抗改记为高频阻抗。</li>
+      <li>最后一个包到达后安静 10 秒，ESP32 把这一轮数据合并成一次 <code>POST /api/weighins</code>（请求头带 <code>X-API-Key</code> 令牌），缺的字段直接省略。</li>
+      <li>服务端按服务器时间记录；同一自动来源 2 分钟内的多次上报会再合并一次，作为兜底。</li>
+      <li>页面每 60 秒刷新，<code>/api/dashboard</code> 用每天最早一次称重重新计算趋势体重、计划偏差和当天的建议摄入。</li>
+    </ol>
+  </div>
+
+  <h2>模块</h2>
+  <div class="grid">
+    <div class="card">
+      <h3><span class="dot" style="background:var(--orange)"></span>采集层</h3>
+      <ul>
+        <li><code>esp32/weight-scale.yaml</code>：ESPHome 配置</li>
+        <li><code>esp32/secrets.yaml</code>：WiFi、bindkey、上报地址（不进 git）</li>
+        <li>失败时只记日志，不重试；Mac mini 关机时那次称重会丢失</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="dot" style="background:var(--blue)"></span>服务层</h3>
+      <ul>
+        <li><code>app/main.py</code>：接口与校验（Pydantic）</li>
+        <li><code>app/planner.py</code>：纯函数算法，无数据库依赖，单独可测</li>
+        <li><code>app/db.py</code>：SQLite 读写与自动来源合并</li>
+        <li><code>tests/</code>：pytest，覆盖算法与接口</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3><span class="dot" style="background:var(--aqua)"></span>数据与部署</h3>
+      <ul>
+        <li>开发：<code>uv run uvicorn ... --reload</code></li>
+        <li>常驻：<code>deploy/install-launchd.sh</code>（登录后自启、崩溃自启）</li>
+        <li>迁移：拷贝 <code>data/weight.db</code> + 改 ESP32 的 <code>report_url</code></li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>接口</h2>
+  <div class="card scroll">
+    <table>
+      <thead><tr><th>接口</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td>POST /api/login · /api/logout</td><td>网页密码登录 / 退出（签名 Cookie，不需要令牌）</td></tr>
+        <tr><td>GET /api/session</td><td>当前身份：web 或 API 令牌名称</td></tr>
+        <tr><td>GET /api/dashboard</td><td>今日卡片、图表序列、警告、每周校准</td></tr>
+        <tr><td>GET / PUT /api/profile</td><td>读取 / 保存计划设置</td></tr>
+        <tr><td>GET /api/weighins?limit=</td><td>称重记录，时间倒序</td></tr>
+        <tr><td>POST /api/weighins</td><td>新增称重；自动来源 2 分钟内合并</td></tr>
+        <tr><td>PATCH /api/weighins/{id}</td><td>修改体重或时间</td></tr>
+        <tr><td>DELETE /api/weighins/{id}</td><td>删除称重</td></tr>
+        <tr><td>POST /api/weighins/import</td><td>CSV 批量导入</td></tr>
+        <tr><td>GET /api/body · /api/report?day=</td><td>身体成分序列 / 某一天的报告</td></tr>
+        <tr><td>GET /api/training?day= · PUT /api/training/{day}</td><td>健身房训练清单 / 保存打勾和重量</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">除登录接口和静态文件外，所有页面和接口都需要登录 Cookie，或请求头 <code>Authorization: Bearer &lt;令牌&gt;</code> / <code>X-API-Key: &lt;令牌&gt;</code>。密码和令牌配置在项目根目录的 <code>.env</code>。</p>
+
+  <footer>2026-10-18 · weight-planner 第 2 阶段</footer>
+</main>
+</body>
+</html>

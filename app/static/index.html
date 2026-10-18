@@ -2,105 +2,411 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
   <title>减重计划</title>
   <link rel="stylesheet" href="/static/style.css">
   <script src="/static/vendor/echarts.min.js"></script>
 </head>
 <body>
-  <header class="top">
-    <h1>减重计划</h1>
-    <span id="todayLabel" class="muted"></span>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></g></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5v.01"/></g></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 7.5v.01"/></g></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></g></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9.3-9.2C1.4 7.4 3.6 4 7 4c2 0 3.3 1.1 5 3 1.7-1.9 3-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.4 12 20 12 20z" fill="currentColor"/></symbol>
+    <symbol id="i-scale" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8.5 9.5a5 5 0 0 1 7 0M12 9.5l1.2-1.8"/></g></symbol>
+  </svg>
+
+  <header class="appbar">
+    <div class="appbar-inner">
+      <div class="brand">
+        <span class="brand-name">减重计划</span>
+        <span id="todayLabel" class="brand-date"></span>
+      </div>
+      <nav class="tabs" id="tabs" aria-label="页面">
+        <a href="#overview" data-tab="overview">概览</a>
+        <a href="#body" data-tab="body">身体成分</a>
+        <a href="#report" data-tab="report">每日报告</a>
+        <a href="#training" data-tab="training">训练</a>
+      </nav>
+      <div class="appbar-actions">
+        <button type="button" class="btn ghost icon" id="openSettings" aria-label="计划设置" title="计划设置">
+          <svg><use href="#i-gear"/></svg>
+        </button>
+        <button type="button" class="btn primary" id="openWeigh">
+          <svg><use href="#i-plus"/></svg><span>记录体重</span>
+        </button>
+      </div>
+    </div>
   </header>
 
-  <main>
-    <section id="warnings" class="warnings"></section>
-    <section id="emptyState" class="panel empty" hidden></section>
+  <main class="page">
+    <section id="alerts" class="alerts" aria-live="polite"></section>
 
+    <section id="emptyState" class="card empty" hidden>
+      <svg class="empty-icon"><use href="#i-scale"/></svg>
+      <h2 id="emptyTitle"></h2>
+      <p id="emptyText" class="muted"></p>
+      <button type="button" class="btn primary" id="emptyAction"></button>
+    </section>
+
+    <div data-view="overview">
     <div id="dashboard" hidden>
-      <section id="card" class="card-grid"></section>
-
-      <section class="panel">
-        <h2>体重轨迹（kg）</h2>
-        <div id="weightChart" class="chart"></div>
-        <p class="hint">虚线是计划曲线，阴影是 ±0.5 kg 容差带；实线是去掉日常波动后的趋势体重，点线是按当前建议摄入的预测。</p>
+      <section class="hero card">
+        <div class="hero-main">
+          <div class="eyebrow">趋势体重</div>
+          <div class="hero-figure"><span id="heroWeight">—</span><small>kg</small></div>
+          <div class="hero-meta">
+            <span id="heroStatus" class="pill"></span>
+            <span id="heroDiff" class="muted"></span>
+          </div>
+          <div id="heroLatest" class="hero-latest"></div>
+        </div>
+        <div class="hero-progress">
+          <div class="progress-head">
+            <span class="eyebrow">进度</span>
+            <span id="progressPct" class="progress-pct"></span>
+          </div>
+          <div class="track" id="progressTrack">
+            <span class="track-fill" id="progressFill"></span>
+            <span class="track-plan" id="progressPlan" title="今日计划位置"></span>
+          </div>
+          <div class="track-ends">
+            <span id="progressStart"></span>
+            <span id="progressTarget"></span>
+          </div>
+          <dl class="facts">
+            <div><dt>已减</dt><dd id="factLost">—</dd></div>
+            <div><dt>还差</dt><dd id="factRemain">—</dd></div>
+            <div><dt>剩余</dt><dd id="factDays">—</dd></div>
+          </dl>
+          <p id="heroOutlook" class="outlook"></p>
+        </div>
       </section>
 
-      <section class="panel">
-        <h2>每日热量（kcal）</h2>
-        <div id="calChart" class="chart small"></div>
+      <section class="kpis" id="kpis"></section>
+
+      <section class="card action" id="actionCard" hidden></section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>体重轨迹</h2>
+            <p class="card-sub">趋势体重已去掉每天的水分波动，和计划曲线对比判断进度</p>
+          </div>
+          <div class="segmented" id="rangeSeg" role="radiogroup" aria-label="时间范围">
+            <button type="button" role="radio" data-range="30">30 天</button>
+            <button type="button" role="radio" data-range="90">90 天</button>
+            <button type="button" role="radio" data-range="all">全程</button>
+          </div>
+        </div>
+        <div id="weightChart" class="chart"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>每日热量</h2>
+            <p class="card-sub">两条线之间的阴影就是当天的热量缺口</p>
+          </div>
+        </div>
+        <div id="calChart" class="chart short"></div>
       </section>
     </div>
 
-    <section class="panel">
-      <h2>记录体重</h2>
-      <form id="weighForm" class="inline-form">
-        <label>体重（kg）<input type="number" name="weight_kg" step="0.05" min="20" max="300" inputmode="decimal" required></label>
-        <label>时间<input type="datetime-local" name="measured_at"></label>
-        <button type="submit">保存</button>
-      </form>
-      <details class="sub-details">
-        <summary>批量导入历史数据</summary>
-        <p class="hint">每行一条：<code>日期,体重</code> 或 <code>日期 时间,体重</code>。只有日期的按早上 8 点记录。</p>
-        <textarea id="importText" rows="5" placeholder="2026-09-01,86.2&#10;2026-09-02 07:30,85.9"></textarea>
-        <button type="button" id="importBtn">导入</button>
-      </details>
-      <p id="weighMsg" class="msg" role="status"></p>
-    </section>
+    <div class="split">
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>称重记录</h2>
+            <p class="card-sub">点一条记录可以修改体重和时间；一天称多次时只按最早一次计算</p>
+          </div>
+        </div>
+        <ol id="history" class="history"></ol>
+        <button type="button" id="moreHistory" class="btn text" hidden></button>
+      </section>
 
-    <section class="panel">
-      <h2>最近记录</h2>
-      <div class="table-wrap">
-        <table id="history">
-          <thead><tr><th>时间</th><th>体重 kg</th><th>来源</th><th></th></tr></thead>
-          <tbody></tbody>
-        </table>
+      <section class="card" id="checkinPanel" hidden>
+        <div class="card-head">
+          <div>
+            <h2>每周校准</h2>
+            <p class="card-sub">每 7 天按趋势体重和剩余天数重算一次建议摄入</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="table" id="checkins">
+            <thead><tr><th>校准日</th><th class="num">趋势体重</th><th class="num">建议摄入</th><th class="num">按期所需</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    </div>
+
+    <!-- 身体成分 -->
+    <div data-view="body" hidden>
+      <section id="bodyEmpty" class="card empty" hidden>
+        <p class="muted">先填写计划设置并记录体重，就能计算身体指标。</p>
+      </section>
+      <div id="bodyContent" hidden>
+        <section class="card">
+          <div class="card-head">
+            <div>
+              <h2>身体指标</h2>
+              <p class="card-sub" id="bodySub"></p>
+            </div>
+            <div class="segmented" id="bodySourceSeg" role="radiogroup" aria-label="数据来源">
+              <button type="button" role="radio" data-source="bia">体重秤测量</button>
+              <button type="button" role="radio" data-source="trend">按趋势体重估算</button>
+            </div>
+          </div>
+          <div class="gauges" id="bodyGauges"></div>
+        </section>
+
+        <div class="split">
+          <section class="card">
+            <div class="card-head"><div><h2>身体构成</h2><p class="card-sub">当前体重分成脂肪、肌肉（含水分）和骨骼三部分</p></div></div>
+            <div id="compBars"></div>
+          </section>
+          <section class="card">
+            <div class="card-head"><div><h2>关键数字</h2><p class="card-sub">和目标体重时的估算值对比</p></div></div>
+            <div class="table-wrap"><table class="table" id="bodyTable"></table></div>
+          </section>
+        </div>
+
+        <section class="card">
+          <div class="card-head"><div><h2>BMI 趋势</h2><p class="card-sub">按趋势体重计算；背景色带是中国成人 BMI 分级</p></div></div>
+          <div id="bmiChart" class="chart short"></div>
+        </section>
+        <section class="card">
+          <div class="card-head"><div><h2>体脂率趋势</h2><p class="card-sub">折线按趋势体重用 Deurenberg 公式估算；圆点是体重秤测阻抗后的 BIA 估算</p></div></div>
+          <div id="fatChart" class="chart short"></div>
+        </section>
+        <p class="method-note">计算方法：BMI 按中国标准分级（WS/T 428-2013）；体脂率分级参考 Gallagher 2000（按年龄和性别）。
+          体重秤测量用小米体脂秤开源社区逆向的 BIA 公式，和米家 App 的新算法可能相差 2–3 个百分点；
+          只有体重时用 Deurenberg 公式。所有成分数值都是估算，适合看变化趋势，不适合当作诊断依据。</p>
       </div>
-      <button type="button" id="moreHistory" class="link-btn" hidden>显示更多</button>
-    </section>
+    </div>
 
-    <section class="panel">
-      <details id="settingsBox">
-        <summary><h2>计划设置</h2></summary>
-        <form id="profileForm" class="grid-form">
-          <label>性别
-            <select name="sex"><option value="male">男</option><option value="female">女</option></select>
-          </label>
-          <label>年龄<input type="number" name="age" min="14" max="100" required></label>
-          <label>身高（cm）<input type="number" name="height_cm" min="100" max="250" step="0.5" required></label>
-          <label>日常活动水平
-            <select name="activity">
-              <option value="sedentary">久坐（几乎不运动）</option>
-              <option value="light">轻度（每周运动 1–3 天）</option>
-              <option value="moderate">中度（每周运动 3–5 天）</option>
-              <option value="active">高度（每周运动 6–7 天）</option>
-            </select>
-          </label>
-          <label>目标体重（kg）<input type="number" name="target_weight" min="30" max="300" step="0.1" required></label>
-          <label>计划开始日期<input type="date" name="plan_start" required></label>
-          <label>目标日期<input type="date" name="target_date" required></label>
-          <label>每天额外运动消耗（kcal）<input type="number" name="exercise_kcal" min="0" max="2000" step="10"></label>
-          <label>起始体重（kg，可留空）<input type="number" name="start_weight" min="30" max="300" step="0.05" placeholder="默认取开始日的趋势体重"></label>
-          <div class="form-actions"><button type="submit">保存计划</button></div>
-        </form>
-        <p id="profileMsg" class="msg" role="status"></p>
-        <div id="planSummary" class="plan-summary"></div>
-      </details>
-    </section>
+    <!-- 每日报告 -->
+    <div data-view="report" hidden>
+      <section id="reportEmpty" class="card empty" hidden>
+        <p class="muted">还没有称重记录。</p>
+      </section>
+      <div id="reportContent" hidden>
+        <section class="card report-nav">
+          <button type="button" class="btn ghost icon" id="reportPrev" aria-label="前一天"><svg><use href="#i-left"/></svg></button>
+          <div class="report-title">
+            <h2 id="reportTitle"></h2>
+            <select id="reportDay" class="input compact" aria-label="选择日期"></select>
+          </div>
+          <button type="button" class="btn ghost icon" id="reportNext" aria-label="后一天"><svg><use href="#i-right"/></svg></button>
+        </section>
 
-    <section class="panel" id="checkinPanel" hidden>
-      <h2>每周校准</h2>
-      <p class="hint">每 7 天用当时的趋势体重和剩余天数重新计算一次建议摄入。</p>
-      <div class="table-wrap">
-        <table id="checkins">
-          <thead><tr><th>校准日</th><th>趋势体重</th><th>建议摄入</th><th>按期所需</th><th>剩余天数</th></tr></thead>
-          <tbody></tbody>
-        </table>
+        <section class="kpis" id="reportKpis"></section>
+
+        <div class="split">
+          <section class="card">
+            <div class="card-head"><div><h2>前后两周</h2><p class="card-sub">竖线是当天；灰点是每日称重，蓝线是趋势体重</p></div></div>
+            <div id="reportChart" class="chart short"></div>
+          </section>
+          <section class="card">
+            <div class="card-head"><div><h2>当天的称重</h2><p class="card-sub">计入计算的是当天最早一次</p></div></div>
+            <ol class="history" id="reportWeighins"></ol>
+          </section>
+        </div>
+
+        <section class="card">
+          <div class="card-head"><div><h2>当天身体指标</h2><p class="card-sub" id="reportBodySub"></p></div></div>
+          <div class="gauges" id="reportGauges"></div>
+        </section>
       </div>
-    </section>
+    </div>
+
+    <div data-view="training" hidden>
+      <section id="trainingEmpty" class="card empty" hidden>
+        <p class="muted">先在计划设置里填写身高、年龄，并记录一次体重，才能按你的情况安排训练。</p>
+      </section>
+      <div id="trainingContent" hidden>
+        <section class="card train-head">
+          <div class="train-nav">
+            <button type="button" class="btn ghost icon" id="trainPrev" aria-label="前一天"><svg><use href="#i-left"/></svg></button>
+            <div class="train-date">
+              <b id="trainDate"></b>
+              <button type="button" class="btn text" id="trainToday" hidden>回到今天</button>
+            </div>
+            <button type="button" class="btn ghost icon" id="trainNext" aria-label="后一天"><svg><use href="#i-right"/></svg></button>
+          </div>
+
+          <div class="train-hero">
+            <div class="train-title">
+              <span class="tpl-badge" id="trainBadge"></span>
+              <div>
+                <h2 id="trainTitle"></h2>
+                <p id="trainFocus" class="muted"></p>
+              </div>
+            </div>
+            <div class="train-progress" id="trainProgress"></div>
+          </div>
+          <p class="train-reason" id="trainReason"></p>
+
+          <div class="timeline" id="trainTimeline"></div>
+
+          <div class="train-controls">
+            <div class="train-control">
+              <span class="eyebrow">今天练</span>
+              <div class="segmented" id="trainTemplateSeg" role="radiogroup" aria-label="今天练什么"></div>
+            </div>
+            <div class="train-control">
+              <span class="eyebrow">可用时间</span>
+              <div class="segmented" id="trainBudgetSeg" role="radiogroup" aria-label="可用时间"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <div class="card-head"><div><h2>最近两周</h2><p class="card-sub">字母是练的内容，下面的条是完成度</p></div></div>
+          <ol class="week-strip" id="trainWeek"></ol>
+        </section>
+
+        <p class="train-preview" id="trainPreview" hidden><svg><use href="#i-info"/></svg>这是预览，到那天再打勾。</p>
+
+        <section class="train-block" id="blockWarmup"></section>
+        <section class="train-block" id="blockStrength"></section>
+        <section class="train-block" id="blockCardio"></section>
+        <section class="train-block" id="blockCooldown"></section>
+
+        <section class="card">
+          <div class="card-head"><div><h2>为什么这样安排</h2><p class="card-sub">和你现在的练法对比</p></div></div>
+          <ul class="todo" id="trainTips"></ul>
+        </section>
+      </div>
+    </div>
+
+    <footer class="footer">本工具用于自我管理，不能替代医生或营养师的建议。</footer>
   </main>
 
-  <footer class="muted">本工具用于自我管理，不能替代医生或营养师的建议。</footer>
+  <!-- 记录 / 修改体重 -->
+  <dialog id="weighDialog" class="sheet" aria-labelledby="weighTitle">
+    <form method="dialog" id="weighForm" class="sheet-body">
+      <div class="sheet-head">
+        <h2 id="weighTitle">记录体重</h2>
+        <button type="button" class="btn ghost icon" data-close aria-label="关闭"><svg><use href="#i-close"/></svg></button>
+      </div>
+
+      <div class="picker">
+        <div class="picker-value">
+          <span id="pickValue">—</span><small>kg</small>
+        </div>
+        <div id="pickDelta" class="picker-delta"></div>
+        <div class="picker-row">
+          <button type="button" class="btn round" id="pickMinus" aria-label="减少 0.05 kg"><svg><use href="#i-minus"/></svg></button>
+          <div class="ruler-wrap">
+            <div class="ruler" id="ruler" tabindex="0" role="slider" aria-label="左右拖动选择体重"
+                 aria-valuemin="20" aria-valuemax="300">
+              <div class="ruler-track" id="rulerTrack"></div>
+            </div>
+            <span class="ruler-needle" aria-hidden="true"></span>
+          </div>
+          <button type="button" class="btn round" id="pickPlus" aria-label="增加 0.05 kg"><svg><use href="#i-plus"/></svg></button>
+        </div>
+        <p class="picker-hint">左右拖动刻度尺，或按住 − / + 微调（每次 0.05 kg）</p>
+      </div>
+
+      <fieldset class="field">
+        <legend>称重时间</legend>
+        <div class="chips" id="timeChips">
+          <button type="button" class="chip" data-when="now">现在</button>
+          <button type="button" class="chip" data-when="morning">今天早上</button>
+          <button type="button" class="chip" data-when="yesterday">昨天早上</button>
+          <button type="button" class="chip" data-when="custom">其他时间</button>
+        </div>
+        <input type="datetime-local" id="pickTime" class="input" hidden>
+        <p id="timeLabel" class="field-hint"></p>
+      </fieldset>
+
+      <p id="weighMsg" class="form-msg" role="status"></p>
+
+      <div class="sheet-actions">
+        <button type="button" class="btn danger-text" id="deleteWeigh" hidden>删除这条记录</button>
+        <span class="spacer"></span>
+        <button type="button" class="btn secondary" data-close>取消</button>
+        <button type="submit" class="btn primary" id="saveWeigh">保存</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- 计划设置 -->
+  <dialog id="settingsDialog" class="sheet wide" aria-labelledby="settingsTitle">
+    <div class="sheet-body">
+      <div class="sheet-head">
+        <h2 id="settingsTitle">计划设置</h2>
+        <button type="button" class="btn ghost icon" data-close aria-label="关闭"><svg><use href="#i-close"/></svg></button>
+      </div>
+
+      <form id="profileForm" class="form-grid">
+        <fieldset class="field span-2">
+          <legend>性别</legend>
+          <div class="segmented full" data-radio="sex">
+            <button type="button" data-value="male">男</button>
+            <button type="button" data-value="female">女</button>
+          </div>
+        </fieldset>
+        <label class="field">年龄<input class="input" type="number" name="age" min="14" max="100" inputmode="numeric" required></label>
+        <label class="field">身高（cm）<input class="input" type="number" name="height_cm" min="100" max="250" step="0.5" inputmode="decimal" required></label>
+        <label class="field span-2">日常活动水平
+          <select class="input" name="activity">
+            <option value="sedentary">久坐：几乎不运动</option>
+            <option value="light">轻度：每周运动 1–3 天</option>
+            <option value="moderate">中度：每周运动 3–5 天</option>
+            <option value="active">高度：每周运动 6–7 天</option>
+          </select>
+        </label>
+        <label class="field">目标体重（kg）<input class="input" type="number" name="target_weight" min="30" max="300" step="0.1" inputmode="decimal" required></label>
+        <label class="field">目标日期<input class="input" type="date" name="target_date" required></label>
+        <label class="field">计划开始日期<input class="input" type="date" name="plan_start" required></label>
+        <label class="field">起始体重（kg）<input class="input" type="number" name="start_weight" min="30" max="300" step="0.05" inputmode="decimal" placeholder="留空取开始日趋势体重"></label>
+        <label class="field span-2">每天额外运动消耗（kcal）<input class="input" type="number" name="exercise_kcal" min="0" max="2000" step="10" inputmode="numeric">
+          <span class="field-hint">没有固定运动就填 0；单独填了运动量时，活动水平按不运动时的状态选</span>
+        </label>
+        <div id="planSummary" class="plan-summary span-2"></div>
+        <p id="profileMsg" class="form-msg span-2" role="status"></p>
+        <div class="sheet-actions span-2">
+          <span class="spacer"></span>
+          <button type="button" class="btn secondary" data-close>取消</button>
+          <button type="submit" class="btn primary">保存计划</button>
+        </div>
+      </form>
+
+      <details class="import">
+        <summary>批量导入历史数据</summary>
+        <p class="field-hint">每行一条：<code>日期,体重</code> 或 <code>日期 时间,体重</code>，只有日期的按早上 8 点记录。</p>
+        <textarea id="importText" class="input" rows="5" placeholder="2026-09-01,86.2&#10;2026-09-02 07:30,85.9"></textarea>
+        <div class="sheet-actions">
+          <p id="importMsg" class="form-msg" role="status"></p>
+          <span class="spacer"></span>
+          <button type="button" class="btn secondary" id="importBtn">导入</button>
+        </div>
+      </details>
+
+      <div class="sheet-actions logout-row">
+        <span class="spacer"></span>
+        <button type="button" class="btn danger-text" id="logoutBtn" hidden>退出登录</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
   <script src="/static/app.js"></script>
 </body>
 </html>

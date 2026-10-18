@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f9f9f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0d0d0d" media="(prefers-color-scheme: dark)">
+  <title>登录 · 减重计划</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <style>
+    .login {
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: grid;
+      place-items: center;
+      padding: 24px 16px;
+    }
+    .login .card { width: 100%; max-width: 380px; padding: 28px 24px 24px; margin: 0; }
+    .login h1 { font-size: 22px; margin: 0; }
+    .login p { margin: 6px 0 0; color: var(--ink-2); font-size: 14px; }
+    .login .btn { width: 100%; margin-top: 18px; min-height: 44px; }
+    .login-icon { width: 40px; height: 40px; color: var(--accent); margin-bottom: 14px; }
+  </style>
+</head>
+<body>
+  <main class="login">
+    <form class="card" id="loginForm">
+      <svg class="login-icon" viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M8.5 9.5a5 5 0 0 1 7 0M12 9.5l1.2-1.8"/></g></svg>
+      <h1>减重计划</h1>
+      <p>请输入访问密码</p>
+      <label class="field">密码
+        <input class="input" type="password" name="password" autocomplete="current-password" required autofocus>
+      </label>
+      <p id="loginMsg" class="form-msg error" role="alert"></p>
+      <button type="submit" class="btn primary">进入</button>
+    </form>
+  </main>
+  <script>
+    const form = document.getElementById('loginForm');
+    const msg = document.getElementById('loginMsg');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('button');
+      btn.disabled = true;
+      msg.textContent = '';
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: form.password.value }),
+        });
+        if (res.ok) {
+          location.replace('/');
+          return;
+        }
+        let detail = `${res.status} ${res.statusText}`;
+        try { detail = (await res.json()).detail || detail; } catch { /* 保留状态码描述 */ }
+        msg.textContent = detail;
+        form.password.select();
+      } catch {
+        msg.textContent = '连接服务器失败';
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

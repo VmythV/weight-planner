@@ -1,4 +1,4 @@
-"""SQLite 存储：称重记录与计划设置。"""
+"""SQLite 存储：称重记录、训练记录与计划设置。"""
 
 from __future__ import annotations
 
@@ -24,6 +24,11 @@ CREATE TABLE IF NOT EXISTS weighins (
     created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_weighins_measured_at ON weighins(measured_at);
+CREATE TABLE IF NOT EXISTS workouts (
+    day TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -119,7 +124,37 @@ class Store:
             row = conn.execute("SELECT * FROM weighins WHERE id = ?", (cur.lastrowid,)).fetchone()
             return dict(row)
 
+    def update_weighin(
+        self, weighin_id: int, measured_at: datetime | None = None, weight_kg: float | None = None
+    ) -> dict | None:
+        """修改一条称重的时间或体重；记录不存在时返回 None。"""
+        fields: dict[str, object] = {}
+        if measured_at is not None:
+            fields["measured_at"] = measured_at.isoformat(timespec="seconds")
+        if weight_kg is not None:
+            fields["weight_kg"] = weight_kg
+        with self._conn() as conn:
+            if fields:
+                assignments = ", ".join(f"{k} = ?" for k in fields)
+                conn.execute(f"UPDATE weighins SET {assignments} WHERE id = ?", (*fields.values(), weighin_id))
+            row = conn.execute("SELECT * FROM weighins WHERE id = ?", (weighin_id,)).fetchone()
+            return dict(row) if row else None
+
     def delete_weighin(self, weighin_id: int) -> bool:
         with self._conn() as conn:
             cur = conn.execute("DELETE FROM weighins WHERE id = ?", (weighin_id,))
             return cur.rowcount > 0
+
+    def list_workouts(self) -> dict[str, dict]:
+        """所有训练记录，键为日期 YYYY-MM-DD。"""
+        with self._conn() as conn:
+            return {row["day"]: json.loads(row["data"]) for row in conn.execute("SELECT day, data FROM workouts")}
+
+    def save_workout(self, day: str, data: dict) -> None:
+        now = datetime.now().astimezone().isoformat(timespec="seconds")
+        with self._conn() as conn:
+            conn.execute(
+                "INSERT INTO workouts (day, data, updated_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(day) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at",
+                (day, json.dumps(data, ensure_ascii=False), now),
+            )

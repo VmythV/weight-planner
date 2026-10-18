@@ -2,3 +2,6 @@
 __pycache__/
 .pytest_cache/
 data/
+esp32/secrets.yaml
+esp32/.esphome/
+.env
