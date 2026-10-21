@@ -430,18 +430,17 @@ function calorieOption(dash, col) {
   };
 }
 
-/** 折线在 0 以上用上升色、以下用下降色：渐变按折线自身的上下范围铺开，在 0 处硬切换。 */
-function signGradient(values, col) {
-  const vals = values.filter((v) => v != null);
-  const max = Math.max(...vals);
-  const min = Math.min(...vals);
-  if (!vals.length || min >= 0) return col.up;
-  if (max <= 0) return col.down;
-  const zero = max / (max - min); // 0 在包围盒里距顶部的比例
-  return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+/**
+ * 折线在 0 以上用上升色、以下用下降色：用整张图的像素坐标铺渐变，在 y=0 的位置硬切换。
+ * 按折线包围盒铺会错位，因为缩放后窗口外的点不参与绘制，包围盒随显示范围变化。
+ */
+function signGradient(chart, col) {
+  const height = chart.getHeight();
+  const zero = Math.min(Math.max(chart.convertToPixel({ yAxisIndex: 0 }, 0) / height, 0), 1);
+  return new echarts.graphic.LinearGradient(0, 0, 0, height, [
     { offset: 0, color: col.up }, { offset: zero, color: col.up },
     { offset: zero, color: col.down }, { offset: 1, color: col.down },
-  ]);
+  ], true);
 }
 
 function deltaOption(dash, col) {
@@ -449,6 +448,10 @@ function deltaOption(dash, col) {
   const base = baseOption(dash, col);
   const actual = dailyDeltas(s.actual);
   const trend = dailyDeltas(s.trend);
+  // 计划曲线逐日的差值；只算计划期内（容差带有值的日子）
+  const planDelta = s.plan.map((v, i) => (
+    i > 0 && s.band_low[i] != null && s.band_low[i - 1] != null ? +(v - s.plan[i - 1]).toFixed(2) : null
+  ));
   const signColor = (v) => (v > 0 ? col.up : col.down);
   const deltaLine = (label, d, i) => {
     if (d.delta[i] == null) return null;
@@ -465,6 +468,7 @@ function deltaOption(dash, col) {
       formatter: (params) => {
         const i = params[0].dataIndex;
         const lines = [deltaLine('每日称重', actual, i), deltaLine('趋势体重', trend, i)].filter(Boolean);
+        if (planDelta[i] != null) lines.push(`<span style="opacity:.7">计划</span>　${signed(planDelta[i])} kg`);
         return [`<b>${esc(s.dates[i])} ${weekday(s.dates[i])}</b>`, ...(lines.length ? lines : ['<span style="opacity:.7">没有可对比的称重</span>'])].join('<br>');
       },
     },
@@ -484,7 +488,11 @@ function deltaOption(dash, col) {
       },
       {
         name: '趋势体重', type: 'line', data: trend.delta, connectNulls: true, symbol: 'none', z: 3,
-        lineStyle: { width: 2.5, color: signGradient(trend.delta, col) },
+        lineStyle: { width: 2.5 }, // 颜色在渲染后按 0 的像素位置设置，见 signGradient
+      },
+      {
+        name: '计划', type: 'line', data: planDelta, symbol: 'none', z: 2, silent: true,
+        lineStyle: { type: [6, 4], width: 1.5, color: col.plan },
       },
     ],
   };
@@ -498,6 +506,7 @@ function renderCharts(dash) {
   calChart ??= echarts.init($('#calChart'));
   weightChart.setOption(weightOption(dash, col), true);
   deltaChart.setOption(deltaOption(dash, col), true);
+  deltaChart.setOption({ series: [{}, { lineStyle: { color: signGradient(deltaChart, col) } }] });
   calChart.setOption(calorieOption(dash, col), true);
   for (const c of [weightChart, deltaChart, calChart]) c.group = 'weight-planner';
   echarts.connect('weight-planner');
