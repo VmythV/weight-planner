@@ -103,12 +103,24 @@
             <p class="card-sub">趋势体重已去掉每天的水分波动，和计划曲线对比判断进度</p>
           </div>
           <div class="segmented" id="rangeSeg" role="radiogroup" aria-label="时间范围">
+            <button type="button" role="radio" data-range="7">7 天</button>
             <button type="button" role="radio" data-range="30">30 天</button>
             <button type="button" role="radio" data-range="90">90 天</button>
+            <button type="button" role="radio" data-range="180">半年</button>
             <button type="button" role="radio" data-range="all">全程</button>
           </div>
         </div>
         <div id="weightChart" class="chart"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <div>
+            <h2>每日变化</h2>
+            <p class="card-sub">和上一次称重那天相比：柱子是每日称重，折线是趋势体重；绿色是下降，红色是上升</p>
+          </div>
+        </div>
+        <div id="deltaChart" class="chart short"></div>
       </section>
 
       <section class="card">

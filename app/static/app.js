@@ -25,6 +25,7 @@ const REFRESH_MS = 60_000;     // 体重秤自动上报后，页面一分钟内�
 
 let weightChart = null;
 let calChart = null;
+let deltaChart = null;
 let lastDash = null;
 let lastHistory = [];
 let historyLimit = HISTORY_SHORT;
@@ -114,6 +115,22 @@ function lastValueIndex(values, dates, day) {
   if (i < 0) i = day > dates[dates.length - 1] ? dates.length - 1 : -1;
   for (; i >= 0; i -= 1) if (values[i] != null) return i;
   return -1;
+}
+
+/** 每个有值的日期和上一个有值的日期之差；prev 是对比日的下标（漏称时会隔好几天）。 */
+function dailyDeltas(values) {
+  const delta = values.map(() => null);
+  const prev = values.map(() => null);
+  let last = -1;
+  values.forEach((v, i) => {
+    if (v == null) return;
+    if (last >= 0) {
+      delta[i] = +(v - values[last]).toFixed(2);
+      prev[i] = last;
+    }
+    last = i;
+  });
+  return { delta, prev };
 }
 
 // ---------- 渲染：概览 ----------
@@ -244,6 +261,7 @@ function themeColors() {
     ink: v('--ink'), ink2: v('--ink-2'), ink3: v('--ink-3'), grid: v('--hairline'), axis: v('--axis'),
     surface: v('--surface'), trend: v('--s-trend'), proj: v('--s-proj'), plan: v('--s-plan'),
     dots: v('--s-dots'), band: v('--s-band'), gap: v('--s-gap'),
+    down: v('--good'), up: v('--critical'),
   };
 }
 
@@ -412,15 +430,76 @@ function calorieOption(dash, col) {
   };
 }
 
+/** 折线在 0 以上用上升色、以下用下降色：渐变按折线自身的上下范围铺开，在 0 处硬切换。 */
+function signGradient(values, col) {
+  const vals = values.filter((v) => v != null);
+  const max = Math.max(...vals);
+  const min = Math.min(...vals);
+  if (!vals.length || min >= 0) return col.up;
+  if (max <= 0) return col.down;
+  const zero = max / (max - min); // 0 在包围盒里距顶部的比例
+  return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+    { offset: 0, color: col.up }, { offset: zero, color: col.up },
+    { offset: zero, color: col.down }, { offset: 1, color: col.down },
+  ]);
+}
+
+function deltaOption(dash, col) {
+  const s = dash.series;
+  const base = baseOption(dash, col);
+  const actual = dailyDeltas(s.actual);
+  const trend = dailyDeltas(s.trend);
+  const signColor = (v) => (v > 0 ? col.up : col.down);
+  const deltaLine = (label, d, i) => {
+    if (d.delta[i] == null) return null;
+    const gap = i - d.prev[i];
+    const since = gap === 1 ? '' : `（较 ${s.dates[d.prev[i]].slice(5)}，隔 ${gap} 天）`;
+    return `<span style="opacity:.7">${label}</span>　<span style="color:${signColor(d.delta[i])}">${signed(d.delta[i])}</span> kg${since}`;
+  };
+  return {
+    ...base,
+    legend: { show: false },
+    grid: { ...base.grid, top: 16 },
+    tooltip: {
+      ...base.tooltip,
+      formatter: (params) => {
+        const i = params[0].dataIndex;
+        const lines = [deltaLine('每日称重', actual, i), deltaLine('趋势体重', trend, i)].filter(Boolean);
+        return [`<b>${esc(s.dates[i])} ${weekday(s.dates[i])}</b>`, ...(lines.length ? lines : ['<span style="opacity:.7">没有可对比的称重</span>'])].join('<br>');
+      },
+    },
+    yAxis: {
+      ...base.yAxis,
+      scale: false,
+      axisLabel: { ...base.yAxis.axisLabel, formatter: (v) => (v > 0 ? `+${v}` : `${v}`) },
+    },
+    series: [
+      {
+        name: '每日称重', type: 'bar', data: actual.delta, barMaxWidth: 10, z: 2,
+        itemStyle: { color: (p) => signColor(p.value), opacity: 0.45, borderRadius: 2 },
+        markLine: {
+          symbol: 'none', silent: true, label: { show: false },
+          data: [{ yAxis: 0 }], lineStyle: { color: col.axis, type: 'solid', width: 1 },
+        },
+      },
+      {
+        name: '趋势体重', type: 'line', data: trend.delta, connectNulls: true, symbol: 'none', z: 3,
+        lineStyle: { width: 2.5, color: signGradient(trend.delta, col) },
+      },
+    ],
+  };
+}
+
 function renderCharts(dash) {
   if (!dash || !dash.ready) return;
   const col = themeColors();
   weightChart ??= echarts.init($('#weightChart'));
+  deltaChart ??= echarts.init($('#deltaChart'));
   calChart ??= echarts.init($('#calChart'));
   weightChart.setOption(weightOption(dash, col), true);
+  deltaChart.setOption(deltaOption(dash, col), true);
   calChart.setOption(calorieOption(dash, col), true);
-  weightChart.group = 'weight-planner';
-  calChart.group = 'weight-planner';
+  for (const c of [weightChart, deltaChart, calChart]) c.group = 'weight-planner';
   echarts.connect('weight-planner');
 }
 
@@ -635,7 +714,7 @@ async function showView() {
     else a.removeAttribute('aria-current');
   }
   try {
-    if (name === 'overview') { weightChart?.resize(); calChart?.resize(); }
+    if (name === 'overview') { weightChart?.resize(); deltaChart?.resize(); calChart?.resize(); }
     if (name === 'body') await loadBody();
     if (name === 'report') await loadReport(arg);
     if (name === 'training') await loadTraining(arg);
@@ -1313,7 +1392,7 @@ $('#rangeSeg').addEventListener('click', (e) => {
 
 let resizeTimer = null;
 window.addEventListener('resize', () => {
-  for (const c of [weightChart, calChart, bmiChart, fatChart, reportChart]) c?.resize();
+  for (const c of [weightChart, deltaChart, calChart, bmiChart, fatChart, reportChart]) c?.resize();
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => renderCharts(lastDash), 150); // 跨过窄屏断点时重排图例
 });
